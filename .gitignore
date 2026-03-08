@@ -37,3 +37,4 @@ next-env.d.ts
 # uploads
 /public/uploads/chat/*
 !/public/uploads/chat/.gitkeep
+.env

@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import AppUser from '../models/AppUser.js';
+import { createCompany } from '../models/Company.js';
+import { createAgent } from '../models/Agent.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'midas-app-secret-key';
@@ -50,6 +52,73 @@ router.post('/register', async (req, res) => {
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// POST /api/auth/register-company
+// Create Company + Agent (super_admin). Same flow as midas_admin register.
+router.post('/register-company', async (req, res) => {
+  try {
+    const { companyName, name, email, password, phone, mcNumber, dotNumber } = req.body;
+
+    if (!companyName?.trim()) {
+      return res.status(400).json({ error: 'Company name is required' });
+    }
+    if (!name?.trim()) {
+      return res.status(400).json({ error: 'Your name is required' });
+    }
+    if (!email?.trim()) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const company = await createCompany({
+      name: companyName.trim(),
+      email: (email || '').trim().toLowerCase(),
+      phone: phone || '',
+      mcNumber: mcNumber || '',
+      dotNumber: dotNumber || '',
+    });
+
+    const agent = await createAgent({
+      email: (email || '').trim(),
+      password,
+      name: name.trim(),
+      role: 'super_admin',
+      companyId: company.companyId,
+    });
+
+    const token = jwt.sign(
+      {
+        agentId: agent.agentId,
+        companyId: company.companyId,
+        email: agent.email,
+        name: agent.name,
+        role: agent.role,
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' },
+    );
+
+    res.status(201).json({
+      ok: true,
+      token,
+      user: {
+        agentId: agent.agentId,
+        companyId: company.companyId,
+        companyName: company.name,
+        email: agent.email,
+        name: agent.name,
+        role: agent.role,
+      },
+    });
+  } catch (err) {
+    console.error('Register company error:', err);
+    const msg = err?.message || 'Registration failed';
+    const status = msg.includes('already exists') ? 409 : 500;
+    res.status(status).json({ error: msg });
   }
 });
 
