@@ -7,7 +7,7 @@ import { createAgent } from '../models/Agent.js';
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'midas-app-secret-key';
 
-// POST /api/auth/register
+// POST /api/auth/register – app/customer signup. Only creates AppUser.
 router.post('/register', async (req, res) => {
   try {
     const { email, password, name, lastName, phone } = req.body;
@@ -19,7 +19,6 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
-    // Check if user already exists
     const existing = await AppUser.findOne({ email: email.toLowerCase().trim() });
     if (existing) {
       return res.status(409).json({ error: 'An account with this email already exists' });
