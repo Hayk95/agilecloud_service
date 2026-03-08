@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import AppUser from '../models/AppUser.js';
-import { createCompany } from '../models/Company.js';
-import { createAgent } from '../models/Agent.js';
+import { createCompany, getCompanyById } from '../models/Company.js';
+import { createAgent, authenticateAgent } from '../models/Agent.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'midas-app-secret-key';
@@ -118,6 +118,45 @@ router.post('/register-company', async (req, res) => {
     const msg = err?.message || 'Registration failed';
     const status = msg.includes('already exists') ? 409 : 500;
     res.status(status).json({ error: msg });
+  }
+});
+
+// POST /api/auth/admin-login – Agent login (for admin dashboard)
+router.post('/admin-login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ ok: false, error: 'Email and password are required' });
+    }
+    const agent = await authenticateAgent(email, password);
+    if (!agent) {
+      return res.status(401).json({ ok: false, error: 'Invalid email or password' });
+    }
+    const company = await getCompanyById(agent.companyId);
+    if (!company || !company.isActive) {
+      return res.status(403).json({ ok: false, error: 'Company account is inactive' });
+    }
+    const token = jwt.sign(
+      { agentId: agent.agentId, companyId: agent.companyId, email: agent.email, name: agent.name, role: agent.role },
+      JWT_SECRET,
+      { expiresIn: '7d' },
+    );
+    res.json({
+      ok: true,
+      token,
+      user: {
+        agentId: agent.agentId,
+        companyId: agent.companyId,
+        companyName: company.name,
+        email: agent.email,
+        name: agent.name,
+        role: agent.role,
+      },
+    });
+  } catch (err) {
+    console.error('Admin login error:', err);
+    const status = err?.message?.includes('deactivated') ? 403 : 500;
+    res.status(status).json({ ok: false, error: err?.message || 'Login failed' });
   }
 });
 

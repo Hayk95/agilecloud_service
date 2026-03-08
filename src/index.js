@@ -6,6 +6,17 @@ import { Server } from 'socket.io';
 import { connectDB } from './config/db.js';
 import quotesRoutes from './routes/quotes.js';
 import authRoutes from './routes/auth.js';
+import adminCarriersRoutes from './routes/admin/carriers.js';
+import adminCustomersRoutes from './routes/admin/customers.js';
+import adminLoadsRoutes from './routes/admin/loads.js';
+import adminTasksRoutes from './routes/admin/tasks.js';
+import adminNewsRoutes from './routes/admin/news.js';
+import adminEmailTemplatesRoutes from './routes/admin/email-templates.js';
+import adminChatRoutes from './routes/admin/chat.js';
+import adminSelectOptionsRoutes from './routes/admin/select-options.js';
+import adminAgentsRoutes from './routes/admin/agents.js';
+import adminQuotesRoutes from './routes/admin/quotes.js';
+import adminDashboardRoutes from './routes/admin/dashboard.js';
 import { setIO } from './lib/socket.js';
 
 const PORT = process.env.PORT || 4000;
@@ -36,6 +47,17 @@ app.get('/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/quotes', quotesRoutes);
+app.use('/api/admin/carriers', adminCarriersRoutes);
+app.use('/api/admin/customers', adminCustomersRoutes);
+app.use('/api/admin/loads', adminLoadsRoutes);
+app.use('/api/admin/tasks', adminTasksRoutes);
+app.use('/api/admin/news', adminNewsRoutes);
+app.use('/api/admin/email-templates', adminEmailTemplatesRoutes);
+app.use('/api/admin/chat', adminChatRoutes);
+app.use('/api/admin/select-options', adminSelectOptionsRoutes);
+app.use('/api/admin/agents', adminAgentsRoutes);
+app.use('/api/admin/quotes', adminQuotesRoutes);
+app.use('/api/admin/dashboard', adminDashboardRoutes);
 
 // Endpoint for Next.js API to emit socket events
 app.post('/api/socket/emit', (req, res) => {

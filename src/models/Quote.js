@@ -57,6 +57,15 @@ function mapQuoteDoc(doc) {
   };
 }
 
+/** Get all quotes for admin (scoped to company, includes unassigned) */
+export async function getAllQuotes(companyId) {
+  const query = companyId
+    ? { $or: [{ companyId }, { companyId: null }, { companyId: { $exists: false } }] }
+    : {};
+  const list = await Quote.find(query).sort({ createdAt: -1 }).lean();
+  return list.map(mapQuoteDoc);
+}
+
 export async function getQuotesByUserId(userId) {
   const list = await Quote.find({ userId })
     .sort({ createdAt: -1 })

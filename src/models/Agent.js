@@ -51,4 +51,75 @@ export async function createAgent({ email, password, name, role = 'agent', compa
   return obj;
 }
 
+export async function getAllAgents(companyId) {
+  const query = companyId ? { companyId } : {};
+  const list = await Agent.find(query).select('-password').sort({ createdAt: -1 }).lean();
+  return list.map(doc => ({
+    id: doc.agentId,
+    agentId: doc.agentId,
+    companyId: doc.companyId,
+    email: doc.email,
+    name: doc.name,
+    role: doc.role,
+    isActive: doc.isActive,
+    lastLogin: doc.lastLogin ? doc.lastLogin.toISOString() : null,
+    createdAt: doc.createdAt ? doc.createdAt.toISOString() : null,
+  }));
+}
+
+export async function getAgentById(agentId, companyId = null) {
+  const query = { agentId };
+  if (companyId) query.companyId = companyId;
+  const doc = await Agent.findOne(query).select('-password').lean();
+  if (!doc) return null;
+  return {
+    id: doc.agentId,
+    agentId: doc.agentId,
+    companyId: doc.companyId,
+    email: doc.email,
+    name: doc.name,
+    role: doc.role,
+    isActive: doc.isActive,
+    lastLogin: doc.lastLogin ? doc.lastLogin.toISOString() : null,
+    createdAt: doc.createdAt ? doc.createdAt.toISOString() : null,
+  };
+}
+
+export async function authenticateAgent(email, password) {
+  const doc = await Agent.findOne({ email: (email || '').toLowerCase() });
+  if (!doc) return null;
+  const isValid = await bcrypt.compare(password, doc.password);
+  if (!isValid) return null;
+  if (!doc.isActive) throw new Error('Account is deactivated');
+  doc.lastLogin = new Date();
+  await doc.save();
+  return { id: doc.agentId, agentId: doc.agentId, companyId: doc.companyId, email: doc.email, name: doc.name, role: doc.role };
+}
+
+export async function updateAgent(agentId, updates, companyId = null) {
+  if (updates.password) updates.password = await bcrypt.hash(updates.password, 10);
+  delete updates.companyId;
+  if (updates.email) {
+    updates.email = updates.email.toLowerCase();
+    const existing = await Agent.findOne({ email: updates.email, agentId: { $ne: agentId } });
+    if (existing) throw new Error('Email already exists');
+  }
+  const query = { agentId };
+  if (companyId) query.companyId = companyId;
+  const doc = await Agent.findOneAndUpdate(query, { $set: updates }, { new: true }).select('-password').lean();
+  return doc;
+}
+
+export async function deleteAgent(agentId, companyId = null) {
+  const query = { agentId };
+  if (companyId) query.companyId = companyId;
+  const agent = await Agent.findOne(query);
+  if (!agent) return false;
+  const companyFilter = companyId ? { companyId, role: 'super_admin' } : { role: 'super_admin' };
+  const superAdmins = await Agent.countDocuments(companyFilter);
+  if (agent.role === 'super_admin' && superAdmins <= 1) throw new Error('Cannot delete the last super admin');
+  const result = await Agent.deleteOne(query);
+  return result.deletedCount > 0;
+}
+
 export default Agent;
