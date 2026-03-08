@@ -2,7 +2,7 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import AppUser from '../models/AppUser.js';
 import { createCompany, getCompanyById } from '../models/Company.js';
-import { createAgent, authenticateAgent } from '../models/Agent.js';
+import { createAgent, authenticateAgent, getAgentById } from '../models/Agent.js';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'midas-app-secret-key';
@@ -229,7 +229,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET /api/auth/me — get current user from token
+// GET /api/auth/me — get current user from token (supports Agent and AppUser)
 router.get('/me', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -240,12 +240,30 @@ router.get('/me', async (req, res) => {
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const user = await AppUser.findById(decoded.userId).select('-password');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+    // Agent token (admin dashboard) – agentId, companyId
+    if (decoded.agentId && decoded.companyId) {
+      const agent = await getAgentById(decoded.agentId, decoded.companyId);
+      if (!agent) return res.status(404).json({ error: 'User not found' });
+      const company = await getCompanyById(decoded.companyId);
+      if (!company || !company.isActive) return res.status(403).json({ error: 'Company inactive' });
+      return res.json({
+        ok: true,
+        user: {
+          agentId: agent.agentId,
+          companyId: agent.companyId,
+          companyName: company.name,
+          email: agent.email,
+          name: agent.name,
+          role: agent.role,
+        },
+      });
     }
 
+    // AppUser token (mobile/customer) – userId
+    const user = await AppUser.findById(decoded.userId).select('-password');
+    if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({
+      ok: true,
       user: {
         id: user._id,
         email: user.email,
@@ -255,7 +273,10 @@ router.get('/me', async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(401).json({ error: 'Invalid token' });
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    throw err;
   }
 });
 
