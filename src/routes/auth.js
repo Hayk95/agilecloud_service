@@ -160,23 +160,49 @@ router.post('/admin-login', async (req, res) => {
   }
 });
 
-// POST /api/auth/login
+// POST /api/auth/login – unified: tries Agent (admin) first, then AppUser (mobile/customer)
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      return res.status(400).json({ ok: false, error: 'Email and password are required' });
     }
 
+    // Try Agent first (admin dashboard)
+    const agent = await authenticateAgent(email, password);
+    if (agent) {
+      const company = await getCompanyById(agent.companyId);
+      if (company && company.isActive) {
+        const token = jwt.sign(
+          { agentId: agent.agentId, companyId: agent.companyId, email: agent.email, name: agent.name, role: agent.role },
+          JWT_SECRET,
+          { expiresIn: '7d' },
+        );
+        return res.json({
+          ok: true,
+          token,
+          user: {
+            agentId: agent.agentId,
+            companyId: agent.companyId,
+            companyName: company.name,
+            email: agent.email,
+            name: agent.name,
+            role: agent.role,
+          },
+        });
+      }
+    }
+
+    // Fall back to AppUser (mobile/customer)
     const user = await AppUser.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ ok: false, error: 'Invalid email or password' });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ ok: false, error: 'Invalid email or password' });
     }
 
     const token = jwt.sign(
@@ -186,6 +212,7 @@ router.post('/login', async (req, res) => {
     );
 
     res.json({
+      ok: true,
       token,
       user: {
         id: user._id,
@@ -197,7 +224,8 @@ router.post('/login', async (req, res) => {
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(500).json({ error: 'Login failed' });
+    const status = err?.message?.includes('deactivated') ? 403 : 500;
+    res.status(status).json({ ok: false, error: err?.message || 'Login failed' });
   }
 });
 
